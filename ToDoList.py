@@ -58,13 +58,46 @@ class TodoListManager:
         """
         Loads list of tasks from file
         """
-        pass
+        try:
+            with open(self.filename, 'r') as f:
+                readable = True
+                while readable:
+                    id_raw = next(f, "").rstrip()
+                    if id_raw == "":
+                        break
+                    description_raw = next(f).rstrip()
+                    priority_raw = next(f).rstrip()
+                    project_raw = next(f).rstrip()
+                    completed_raw = next(f).rstrip()
+
+                    self.data[int(id_raw)] = {
+                        'desc': description_raw,
+                        'completed': completed_raw == "1"
+                    }
+                    item = self.data[int(id_raw)]
+
+                    if project_raw != "":
+                        item["project"] = project_raw
+                    if priority_raw != "":
+                        item["priority"] = int(priority_raw)
+        except FileNotFoundError:
+            pass
 
     def save(self):
         """
         Saves list of tasks to file
         """
-        pass
+        data = '\n'.join([
+            f'{id}\n'
+            f'{v.get("desc", "")}\n'
+            f'{v.get("priority", "")}\n'
+            f'{v.get("project", "")}\n'
+            f'{"1" if v.get("completed", "") else "0"}'
+            for id, v in self.data.items()
+        ])
+
+        with open(self.filename, 'w') as f:
+            f.write(data)
 
     def add_item(self, new_item):
         """
@@ -88,7 +121,6 @@ class TodoListManager:
             return True
         except KeyError:
             return False
-        
 
     def remove_items(self, attr, value):
         """
@@ -104,7 +136,7 @@ class TodoListManager:
         """
         Retrieves items by attribute/value combination
         """
-        return {k: v for k, v in self.data.items() if (attr=="id" and k==value) or (attr!="id" and (attr is None or v[attr] == value))}
+        return {k: v for k, v in self.data.items() if (attr == "id" and k == value) or (attr != "id" and (attr is None or v[attr] == value))}
 
     def apply_action(self, action):
         """Applies an action to the list of tasks"""
@@ -118,7 +150,8 @@ class TodoListManager:
             return self.remove_items(action.attr, action.value)
 
 
-tlm = TodoListManager("test.txt")
+tlm = TodoListManager("data.txt")
+
 
 def add_item(command):
     description = ""
@@ -171,7 +204,6 @@ def add_item(command):
             except ValueError:
                 print("Enter a priority between 1 and 4")
 
-        
         while project == None:
             try:
                 project_input = input(f'Project: ({str(project)}) ')
@@ -201,7 +233,7 @@ def update_item(command):
             id = int(command[0])
         except IndexError:
             raise ValueError("Missing ID")
-        
+
         if len(command) < 2:
             raise ValueError("Nothing to do. Fail to prompt.")
 
@@ -223,6 +255,8 @@ def update_item(command):
             else:
                 if last_word + 1 < i and description != "":
                     raise ValueError("Literally unparsable")
+                if description is None:
+                    description = ""
 
                 description += token + " "
                 last_word = i
@@ -256,7 +290,6 @@ def update_item(command):
             except ValueError:
                 print("Enter a priority between 1 and 4")
 
-        
         while project == None:
             try:
                 project_input = input(f'Project: ({str(project)}) ')
@@ -272,6 +305,7 @@ def update_item(command):
 
     return TodoListUpdateAction(id, description, priority, project)
 
+
 def remove_item(command):
     id = None
     try:
@@ -281,15 +315,17 @@ def remove_item(command):
             raise ValueError("Missing index")
     except ValueError:
         while id is None:
-            try:    
+            try:
                 id = int(input("Enter ID to Remove: "))
             except ValueError:
                 print("Enter an ID to remove")
 
     return TodoListRemoveAction("id", id)
 
+
 def purge_items():
     return TodoListRemoveAction("completed", True)
+
 
 def done_item(command):
     id = None
@@ -300,21 +336,28 @@ def done_item(command):
             raise ValueError("Missing index")
     except ValueError:
         while id is None:
-            try:    
+            try:
                 id = int(input("Enter ID to mark as completed: "))
             except ValueError:
                 print("Enter an ID to mark as completed")
 
     return TodoListUpdateAction(id, completed=True)
 
+
 def print_all_tasks():
+    print(f"{'ID':6}{'Description':20}{'Priority':10}{'Project':15}{'Completed':10}")
     for k, v in tlm.get_items().items():
-        print(f'#{k}: {v.description} {v.priority} {v.project}')
+        print(
+            f"{'#' + str(k):6}{v.get('desc', ''):20}{str(v.get('priority', '')):10}{v.get('project', ''):15}{'Yes' if v['completed'] else 'No' :10}")
+
 
 def print_remaining_tasks():
-    for k, v in tlm.get_items("competed", False).items():
-        print(f'#{k}: {v.description} {v.priority} {v.project}')
+    print(f"{'ID':6}{'Description':20}{'Priority':10}{'Project':15}")
+    for k, v in tlm.get_items("completed", False).items():
+        print(f"{'#' + str(k):6}{v.get('desc', ''):20}{str(v.get('priority', '')):10}{v.get('project', ''):15}")
 
+
+tlm.load()
 while True:
     try:
         cmd = input("=> ")
@@ -355,7 +398,18 @@ while True:
         if command == "purge":
             updated = tlm.apply_action(purge_items())
             print(str(updated) + " completed tasks removed")
-        
+
+        if command == "list":
+            try:
+                listing = tokens[1].lower()
+                if listing == "all":
+                    print_all_tasks()
+                elif listing == "todo":
+                    print_remaining_tasks()
+                else:
+                    print("Specify appropriate list: all or todo")
+            except IndexError:
+                print("Specify appropriate list: all or todo")
+        tlm.save()
     except KeyboardInterrupt:
         print("Operation cancelled")
-    
